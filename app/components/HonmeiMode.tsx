@@ -86,6 +86,9 @@ export default function HonmeiMode() {
         setLoadingStep("");
         return;
       }
+      if (data.warning) {
+        setError(data.warning);
+      }
       const parsed: ExtractedData = data.extracted;
       setMode1(parsed.analysis_md || "");
 

@@ -25,7 +25,7 @@ async function callClaude(system: string, content: unknown[]): Promise<string> {
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
-      max_tokens: 1500,
+      max_tokens: 3000,
       system,
       messages: [{ role: "user", content }],
     }),
@@ -95,6 +95,31 @@ export async function POST(req: NextRequest) {
     try {
       parsed = JSON.parse(stripJsonFence(raw));
     } catch {
+      // JSONが途中で切れた場合のフォールバック: 可能な範囲でodds/analysis_mdを救出する
+      const cleaned = stripJsonFence(raw);
+      const oddsMatch = cleaned.match(/"odds"\s*:\s*(\[[^\]]*\])/);
+      const mdMatch = cleaned.match(/"analysis_md"\s*:\s*"([\s\S]*)/);
+      let odds = null;
+      if (oddsMatch) {
+        try {
+          odds = JSON.parse(oddsMatch[1]);
+        } catch {
+          odds = null;
+        }
+      }
+      let analysisMd = "";
+      if (mdMatch) {
+        analysisMd = mdMatch[1]
+          .replace(/\\n/g, "\n")
+          .replace(/\\"/g, '"')
+          .replace(/"\s*,?\s*\}?\s*$/, "");
+      }
+      if (analysisMd) {
+        return NextResponse.json({
+          extracted: { odds, analysis_md: analysisMd, notes: [] },
+          warning: "応答が途中で切れたため、一部データが欠落している可能性があります",
+        });
+      }
       return NextResponse.json({ error: "数値データの抽出に失敗しました", raw_text: raw }, { status: 200 });
     }
     return NextResponse.json({ extracted: parsed });
